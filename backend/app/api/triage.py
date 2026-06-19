@@ -25,7 +25,7 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
     try:
         row = analytics_service.con.execute(f"""
             SELECT id,
-                   COALESCE(junction, police_station, 'Unknown Junction') as junction,
+                   COALESCE(NULLIF(junction, 'NULL'), NULLIF(police_station, 'NULL'), 'Geo-Point (' || ROUND(latitude, 4) || ', ' || ROUND(longitude, 4) || ')') as junction,
                    latitude, longitude,
                    event_cause as type, event_type,
                    start_datetime, end_datetime,
