@@ -18,35 +18,56 @@ client = Groq(api_key=GROQ_API_KEY)
 
 def generate_commander_response(request: ChatRequest) -> ChatResponse:
     """
-    Calls Groq's Llama-3.1-70b API, injecting live DuckDB analytics directly into the system prompt.
+    Calls Groq's Llama-3.3-70b API, injecting live DuckDB analytics directly into the system prompt.
     """
     
-    # 1. Fetch live traffic anomalies from the database
+    # 1. Fetch live holistic data from the database
     try:
-        worst_junctions = analytics_service.get_worst_junctions(limit=5)
-        context_str = json.dumps(worst_junctions, indent=2)
+        # Get worst congestion points
+        worst_junctions = analytics_service.get_worst_junctions(limit=3)
+        
+        # Get active high-risk incidents (First15)
+        active_incidents = analytics_service.con.execute("""
+            SELECT count(*) as count, event_cause 
+            FROM historical_events 
+            WHERE event_type = 'unplanned' 
+            GROUP BY event_cause
+        """).fetchall()
+        
+        # Get total police violations (ParkGuard)
+        total_violations = analytics_service.con.execute("""
+            SELECT count(*) FROM violations
+        """).fetchone()[0]
+
+        context = {
+            "first15_active_incidents_by_cause": [f"{row[0]} {row[1]}" for row in active_incidents],
+            "parkguard_total_violations_recorded": total_violations,
+            "chronic_congestion_junctions": worst_junctions
+        }
+        context_str = json.dumps(context, indent=2)
     except Exception as e:
         context_str = f"Error fetching live database analytics: {e}"
         
     # 2. Build the System Prompt
     system_prompt = f"""
-You are Sentinel, an advanced AI Command Assistant for the Bengaluru Traffic Police.
+You are Sentinel, an advanced AI Command Assistant overseeing the First15 (Incident Triage) and ParkGuard (Civic Monitoring) systems.
 You operate a cyberpunk-themed, real-time tactical dashboard.
 
-=== LIVE CITY DATA (CHRONIC PAIN POINTS) ===
-The following is live data fetched directly from our DuckDB analytics engine regarding the most severe junctions right now:
+=== LIVE SENTINEL PLATFORM DATA ===
+The following is live data fetched directly from our DuckDB analytics engine regarding both emergency incidents and civic violations:
 {context_str}
 ============================================
 
 Instructions:
-1. You must answer the commander's (user's) queries based primarily on the LIVE CITY DATA provided above.
-2. If asked where to deploy resources, tow trucks, or police officers, recommend the junctions with the highest 'total_delay_minutes' or 'incident_count'.
-3. Maintain a tactical, concise, and highly intelligent persona (like JARVIS or a military AI).
-4. Do NOT use markdown formatting like **bold** or bullet points, because the terminal UI renders raw text.
-5. Keep your responses under 4 sentences to fit inside the dashboard terminal.
+1. You must answer the commander's queries based primarily on the LIVE DATA provided above.
+2. If asked about First15 or incidents, refer to the active unplanned incidents and mention ML-driven triage and emergency dispatch.
+3. If asked about ParkGuard or violations, refer to the total police violations recorded and civic infrastructure monitoring.
+4. Maintain a tactical, concise, and highly intelligent persona (like JARVIS or a military AI).
+5. Do NOT use markdown formatting like **bold** or bullet points, because the terminal UI renders raw text.
+6. Keep your responses under 4 sentences to fit inside the dashboard terminal.
 """
 
-    # 3. Call the Llama 3.3 70B Model via Groq (3.1 was decommissioned)
+    # 3. Call the Llama 3.3 70B Model via Groq
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
