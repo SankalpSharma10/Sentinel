@@ -8,17 +8,16 @@ class AnalyticsService:
         self._initialize_real_data()
 
     def _initialize_real_data(self):
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ml_pipeline/data"))
-        events_csv = os.path.join(base_dir, "Astram event data_anonymized - Astram event data_anonymizedb40ac87.csv")
-        violations_csv = os.path.join(base_dir, "jan to may police violation_anonymized791b166.csv")
+        # Paths to the raw data files
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        events_csv = os.path.join(base_dir, "ml_pipeline", "data", "Astram event data_anonymized - Astram event data_anonymizedb40ac87.csv.gz")
+        violations_csv = os.path.join(base_dir, "ml_pipeline", "data", "jan to may police violation_anonymized791b166.csv.gz")
 
-        # Load Astram Events
         try:
             self.con.execute(f"CREATE TABLE historical_events AS SELECT * FROM read_csv_auto('{events_csv}', ignore_errors=true)")
         except Exception as e:
             print(f"DuckDB Event Load Error: {e}")
-            
-        # Load Violations
+
         try:
             self.con.execute(f"CREATE TABLE violations AS SELECT * FROM read_csv_auto('{violations_csv}', ignore_errors=true)")
         except Exception as e:
