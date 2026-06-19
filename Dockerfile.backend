@@ -1,0 +1,19 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Copy the backend requirements
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the entire monorepo to preserve relative paths for ml_pipeline
+COPY . .
+
+# Set PYTHONPATH so the backend app can be run from the root
+ENV PYTHONPATH="/app/backend"
+
+# Expose port
+EXPOSE 8000
+
+# Run Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

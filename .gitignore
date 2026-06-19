@@ -1,0 +1,4 @@
+
+# Ignore large dataset files for GitHub
+ml_pipeline/data/*.csv
+

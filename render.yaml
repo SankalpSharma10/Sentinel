@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: sentinel-backend
+    env: docker
+    dockerfilePath: ./Dockerfile.backend
+    region: singapore
+    plan: free

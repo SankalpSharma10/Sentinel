@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sentinel-bg: #0A0A0B;
+  --color-sentinel-panel: rgba(22, 22, 24, 0.6);
+  --color-sentinel-cyan: #4A6CF7;
+  --color-sentinel-amber: #f59e0b;
+  --color-sentinel-crimson: #ff2a2a;
+}
+
+:root {
+  background-color: var(--color-sentinel-bg);
+  color: #F5F5F7;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.glass-panel {
+  background: var(--color-sentinel-panel);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(74, 108, 247, 0.3);
+}
+
+.glow-crimson {
+  box-shadow: 0 0 20px rgba(255, 42, 42, 0.3);
+}
+
+.glow-text-cyan {
+  text-shadow: 0 0 10px rgba(74, 108, 247, 0.5);
+}
+
+/* Custom scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #030712; 
+}
+::-webkit-scrollbar-thumb {
+  background: #374151; 
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563; 
+}
