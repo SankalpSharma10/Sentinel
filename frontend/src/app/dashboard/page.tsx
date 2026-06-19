@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IncidentMap } from '@/components/IncidentMap';
 import { TriagePanel } from '@/components/TriagePanel';
+import { CommanderChat } from '@/components/CommanderChat';
 
 interface Incident {
   id: string; junction: string; lat: number; lng: number;
@@ -83,6 +84,11 @@ export default function Dashboard() {
         ghostEarlyFilter={ghostEarlyFilter}
         onToggleGhostFilter={setGhostEarlyFilter}
       />
+
+      {/* ── AI COMMANDER CHAT (Fixed on Left) ────────── */}
+      <div className="absolute left-6 bottom-8 z-30 pointer-events-auto">
+        <CommanderChat />
+      </div>
 
       {/* ── EMPTY STATE HINT (visible when nothing selected) ─ */}
       <AnimatePresence>
