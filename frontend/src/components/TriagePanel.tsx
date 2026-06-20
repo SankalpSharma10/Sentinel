@@ -287,11 +287,12 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
   const [similar, setSimilar]     = useState<SimilarCase[]>([]);
   const [playbook, setPlaybook]   = useState<PlaybookData | null>(null);
   const [loading, setLoading]     = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!incidentId) return;
     setActiveTab(0); setTriage(null); setSimilar([]); setPlaybook(null);
-    setLoading(true);
+    setLoading(true); setFetchError(null);
 
     // Fetch triage first, then use its output to fetch playbook
     // Fetch triage first, then use its output to fetch playbook
@@ -325,9 +326,21 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
       })
       .catch(err => {
         console.error('Triage fetch error:', err);
+        setFetchError('Backend is warming up. Please wait a moment and try again.');
         setLoading(false);
       });
   }, [incidentId]);
+
+  const retryFetch = () => {
+    if (!incidentId) return;
+    setFetchError(null);
+    setTriage(null);
+    setLoading(true);
+    fetch(`/api/v1/triage/${incidentId}`)
+      .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
+      .then((t: Triage) => { setTriage(t); setLoading(false); })
+      .catch(err => { setFetchError('Still warming up. Try again in 30 seconds.'); setLoading(false); });
+  };
 
   const color = triage?.risk_level ? (RISK_COLOR[triage.risk_level] || '#4A6CF7') : '#4A6CF7';
 
@@ -387,9 +400,26 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
                 <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest animate-pulse">Running XGBoost Triage…</p>
               </div>
             )}
-            {!loading && (
+            {!loading && fetchError && (
+              <div className="flex flex-col items-center justify-center h-48 gap-4 px-6">
+                <div className="w-12 h-12 rounded-full bg-[#ff2a2a]/10 border border-[#ff2a2a]/20 flex items-center justify-center text-xl">⚡</div>
+                <p className="text-[10px] font-mono text-gray-400 text-center leading-relaxed">{fetchError}</p>
+                <button
+                  onClick={retryFetch}
+                  className="px-5 py-2 rounded-lg bg-[#4A6CF7]/15 border border-[#4A6CF7]/30 text-[#4A6CF7] text-[10px] font-mono font-bold tracking-widest uppercase hover:bg-[#4A6CF7]/25 transition-all cursor-pointer"
+                >
+                  ↻ Retry Triage
+                </button>
+              </div>
+            )}
+            {!loading && !fetchError && (
               <>
                 {activeTab === 0 && triage   && <TriageTab   data={triage} />}
+                {activeTab === 0 && !triage  && (
+                  <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">
+                    <p className="text-[10px] font-mono text-gray-500 text-center">No triage data available for this incident.</p>
+                  </div>
+                )}
                 {activeTab === 1 && <SimilarTab cases={similar} onStartGhostReplay={() => onStartGhostReplay(similar)} onStopGhostReplay={onStopGhostReplay} isGhostActive={isGhostActive} ghostEarlyFilter={ghostEarlyFilter} onToggleGhostFilter={onToggleGhostFilter} />}
                 {activeTab === 2 && playbook  && <PlaybookTab data={playbook} incidentId={incidentId} incidentMeta={incidentMeta} />}
               </>
