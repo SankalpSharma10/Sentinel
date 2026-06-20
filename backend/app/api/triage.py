@@ -14,7 +14,56 @@ except:
     impact_model = None
     duration_model = None
 
-DURATION_LABELS = {0: "< 30 min", 1: "30 – 90 min", 2: "> 90 min"}
+DURATION_LABELS = {0: "< 30 min", 1: "30 - 90 min", 2: "> 90 min"}
+
+# ── Smart label resolver for the 'others' catch-all category ──
+def resolve_incident_type(event_cause: str, description: str) -> str:
+    """
+    The raw dataset dumps many real incidents into a generic 'others' bucket.
+    This function extracts a meaningful label from the description field
+    using keyword classification.
+    """
+    cause = str(event_cause).lower().strip()
+    if cause not in ('others', 'other', 'nan', ''):
+        # Already has a real type — just clean it up
+        return cause.replace('_', ' ').title()
+
+    desc = str(description).lower() if description and str(description) not in ('null', 'nan', 'none', '') else ''
+
+    # Keyword → Label mapping (ordered by priority)
+    keyword_map = [
+        (['tyre', 'tire', 'puncture', 'punchar', 'tyer blost', 'tyear'], 'Tyre Puncture'),
+        (['petrol nil', 'petrol', 'fuel', 'diesel'], 'Vehicle Out of Fuel'),
+        (['signal off', 'signal problem', 'signal fault', 'traffic signal'], 'Signal Malfunction'),
+        (['drain', 'drainage', 'sewage', 'manhole', 'chamber'], 'Drainage Obstruction'),
+        (['electrical', 'electric pole', 'pole'], 'Fallen Electrical Pole'),
+        (['tree', 'branch', 'fell', 'ಮರ', 'ಕೊಂಬೆ'], 'Tree Branch Fall'),
+        (['parked', 'parking', 'park'], 'Illegal Parking Blockage'),
+        (['bus offroad', 'bus offload', 'bus off road', 'bmtc', 'ksrtc bus'], 'Bus Off-Road'),
+        (['starting problem', 'starting problam', 'vehicle starting', 'car wire', 'engine'], 'Vehicle Technical Fault'),
+        (['bwssb', 'bbmp', 'kride', 'work', 'construction work', 'road work'], 'Utility Work Disruption'),
+        (['slow', 'heavy traffic', 'traffic jam', 'congestion'], 'Traffic Congestion'),
+        (['accident', 'collision', 'crash'], 'Accident'),
+        (['crowd', 'public', 'gathering'], 'Public Gathering'),
+        (['fog', 'visibility', 'rain', 'weather'], 'Weather Related'),
+        (['no problem', 'clear', 'normal', 'ok'], 'All Clear — No Incident'),
+    ]
+
+    for keywords, label in keyword_map:
+        if any(kw in desc for kw in keywords):
+            return label
+
+    # If description exists but nothing matched, capitalise first 40 chars of description
+    if desc and len(desc) > 3:
+        clean = desc[:50].capitalize()
+        # Strip anonymized tokens
+        import re
+        clean = re.sub(r'\[LOCATION\]|\[PERSON\]|\[PHONE\]', '', clean).strip()
+        if len(clean) > 5:
+            return clean
+
+    return 'Miscellaneous Incident'
+
 
 @router.get("/triage/{incident_id}")
 def get_triage(incident_id: str) -> Dict[str, Any]:
@@ -29,7 +78,9 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
                    latitude, longitude,
                    event_cause as type, event_type,
                    start_datetime, end_datetime,
-                   CAST(requires_road_closure AS VARCHAR) as closure_type
+                   CAST(requires_road_closure AS VARCHAR) as closure_type,
+                   COALESCE(NULLIF(description, 'NULL'), '') as description,
+                   COALESCE(NULLIF(corridor, 'NULL'), '') as corridor
             FROM historical_events
             WHERE CAST(id AS VARCHAR) = '{incident_id}'
             LIMIT 1
@@ -39,7 +90,7 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
             raise HTTPException(status_code=404, detail="Incident not found")
 
         cols = ['id','junction','lat','lng','type','event_type','start_datetime',
-                'end_datetime','closure_type']
+                'end_datetime','closure_type','description','corridor']
         d = dict(zip(cols, row))
 
         dt = pd.to_datetime(d['start_datetime'], errors='coerce')
@@ -70,7 +121,8 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
         # ── DEMO FIX: Inject dynamic variations based on Event Type ──
         # Because the ML model only trained on lat/lng/time, it overfits and outputs High Risk for everything.
         # We blend event-type heuristics to ensure the dashboard shows diverse and realistic triage results.
-        event_type_str = str(d['type']).lower()
+        resolved_type = resolve_incident_type(d['type'], d.get('description', ''))
+        event_type_str = resolved_type.lower()
         is_closure = d['closure_type'] and str(d['closure_type']).lower() == 'true'
 
         if 'accident' in event_type_str or is_closure:
@@ -153,7 +205,9 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
         return {
             "incident_id": incident_id,
             "junction": d['junction'],
-            "type": str(d['type']).replace('_',' ').title(),
+            "type": resolved_type,
+            "description": str(d.get('description', '')).strip(),
+            "corridor": str(d.get('corridor', '')).strip(),
             "lat": float(d['lat']),
             "lng": float(d['lng']),
             "risk_level": risk_level,

@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 from typing import List, Dict, Any
-import os, joblib, pandas as pd
+import os, joblib, pandas as pd, re
 from datetime import datetime
 from app.services.analytics import analytics_service
+from app.api.triage import resolve_incident_type
 
 router = APIRouter()
 
@@ -60,14 +61,15 @@ def get_incidents() -> List[Dict[str, Any]]:
             SELECT id,
                    COALESCE(NULLIF(junction, 'NULL'), NULLIF(police_station, 'NULL'), 'Geo-Point (' || ROUND(latitude, 4) || ', ' || ROUND(longitude, 4) || ')') as junction,
                    latitude, longitude, event_cause as type,
-                   event_type, start_datetime
+                   event_type, start_datetime,
+                   COALESCE(NULLIF(description, 'NULL'), '') as description
             FROM historical_events
             WHERE latitude IS NOT NULL AND longitude IS NOT NULL
             AND event_type = 'unplanned'
             ORDER BY random()
             LIMIT 40
         """).fetchall()
-        cols = ['id','junction','lat','lng','type','event_type','start_datetime']
+        cols = ['id','junction','lat','lng','type','event_type','start_datetime','description']
         results = []
         for row in rows:
             d = dict(zip(cols, row))
@@ -83,7 +85,7 @@ def get_incidents() -> List[Dict[str, Any]]:
                 "junction": junc_name,
                 "lat": float(d['lat']),
                 "lng": float(d['lng']),
-                "type": str(d['type']).replace('_',' ').title(),
+                "type": resolve_incident_type(d['type'], d.get('description', '')),
                 "risk_level": m['risk_level'],
                 "risk_score": m['risk_score'],
                 "tow_likely": m['tow_likely'],

@@ -363,8 +363,11 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
                 <div className="text-sm font-bold text-[#F5F5F7] font-mono truncate">
                   {triage?.junction || incidentMeta?.junction || '—'}
                 </div>
-                <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                  {triage?.type || incidentMeta?.type || ''}
+                <div className="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-2">
+                  <span>{triage?.type || incidentMeta?.type || ''}</span>
+                  {(triage as any)?.corridor && (triage as any).corridor !== '' && (
+                    <span className="text-gray-600">· {(triage as any).corridor}</span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
