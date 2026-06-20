@@ -22,10 +22,11 @@ export default function Dashboard() {
   const [isGhostActive, setIsGhostActive] = useState(false);
   const [ghostEarlyFilter, setGhostEarlyFilter] = useState(false);
 
-  // Penalty Zone State
+  // Penalty Zone State — MUST be useState (not useRef) so React re-renders when map loads
   const [penaltyZonesVisible, setPenaltyZonesVisible] = useState(false);
   const [penaltyZonesData, setPenaltyZonesData] = useState<any>(null);
-  const mapInstanceRef = useRef<any>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null); // useState triggers re-render!
+  const mapInstanceRef = useRef<any>(null); // keep ref for flyTo (no re-render needed there)
 
   const handleSelectIncident = (inc: Incident | null) => {
     setSelected(inc);
@@ -35,8 +36,9 @@ export default function Dashboard() {
     }
   };
 
-  const handleMapReady = (mapInstance: any) => {
-    mapInstanceRef.current = mapInstance;
+  const handleMapReady = (map: any) => {
+    mapInstanceRef.current = map;
+    setMapInstance(map); // triggers re-render so PenaltyZoneOverlay gets the real map
   };
 
   // Fly map to a ghost fleet vehicle location
@@ -106,7 +108,7 @@ export default function Dashboard() {
 
       {/* ── PENALTY ZONE OVERLAY (map layer) ─────────── */}
       <PenaltyZoneOverlay
-        mapInstance={mapInstanceRef.current}
+        mapInstance={mapInstance}
         isVisible={penaltyZonesVisible}
       />
 

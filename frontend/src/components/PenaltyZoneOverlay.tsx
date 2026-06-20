@@ -70,67 +70,55 @@ export function PenaltyZoneOverlay({ mapInstance, isVisible }: Props) {
 
     if (!isVisible || !data?.zones.length) return;
 
+    console.log(`[PenaltyZone] Drawing ${data.zones.length} zones on map`, mapInstance);
+
     data.zones.forEach((zone) => {
       const color = zone.severity === 'SEVERE' ? '#ff2a2a' : zone.severity === 'MODERATE' ? '#ffb320' : '#f59e0b';
-      const opacity = zone.severity === 'SEVERE' ? 0.18 : zone.severity === 'MODERATE' ? 0.12 : 0.08;
+      const sizePx = zone.severity === 'SEVERE' ? 120 : zone.severity === 'MODERATE' ? 80 : 50;
 
       try {
-        // Draw a pulsing SVG circle marker instead of a real geographic circle
-        // Since Mappls might not support circle overlay, we use large custom HTML markers
-        const sizePx = zone.severity === 'SEVERE' ? 80 : zone.severity === 'MODERATE' ? 55 : 35;
         const marker = new M.Marker({
           map: mapInstance,
           position: { lat: zone.lat, lng: zone.lng },
-          html: `
-            <div style="
-              position:relative;
-              width:${sizePx}px;
-              height:${sizePx}px;
-              transform:translate(-50%,-50%);
-              pointer-events:none;
-            ">
-              <div style="
-                position:absolute;
-                inset:0;
-                border-radius:50%;
-                background:${color};
-                opacity:${opacity};
-                animation: penaltyPulse 3s ease-in-out infinite;
-              "></div>
-              <div style="
-                position:absolute;
-                inset:8px;
-                border-radius:50%;
-                border:1.5px solid ${color};
-                opacity:0.5;
-              "></div>
-              <div style="
-                position:absolute;
-                inset:0;
-                border-radius:50%;
-                border:1px solid ${color};
-                opacity:0.25;
-                animation: penaltyRing 3s ease-in-out infinite;
-              "></div>
-              <div style="
-                position:absolute;
-                top:50%; left:50%;
-                transform:translate(-50%,-50%);
-                font-size:${zone.severity === 'SEVERE' ? 14 : 10}px;
-                font-family:monospace;
-                font-weight:900;
-                color:${color};
-                text-shadow:0 0 8px ${color};
-                white-space:nowrap;
-                pointer-events:none;
-              ">${zone.severity === 'SEVERE' ? 'P' : 'p'}</div>
-            </div>
-          `,
+          html: `<div style="
+            width:${sizePx}px;
+            height:${sizePx}px;
+            border-radius:50%;
+            background:${color};
+            opacity:0.22;
+            border:3px solid ${color};
+            transform:translate(-50%,-50%);
+            box-shadow:0 0 20px ${color},0 0 40px ${color}40;
+            animation:penaltyPulse 2.5s ease-in-out infinite;
+            pointer-events:none;
+          "></div>`,
           zIndex: 5,
         });
         circlesRef.current.push(marker);
+
+        // Add a label marker on top
+        const label = new M.Marker({
+          map: mapInstance,
+          position: { lat: zone.lat, lng: zone.lng },
+          html: `<div style="
+            background:rgba(10,10,11,0.9);
+            border:1px solid ${color};
+            border-radius:6px;
+            padding:3px 7px;
+            font-size:9px;
+            font-family:monospace;
+            font-weight:900;
+            color:${color};
+            white-space:nowrap;
+            transform:translate(-50%, -${sizePx / 2 + 18}px);
+            box-shadow:0 0 10px ${color}40;
+            pointer-events:none;
+          ">🅿 ${zone.total_violations.toLocaleString()}</div>`,
+          zIndex: 6,
+        });
+        circlesRef.current.push(label);
       } catch (e) {
-        console.error('Penalty zone marker error:', e);
+        console.error('[PenaltyZone] Marker error:', e);
       }
     });
 
