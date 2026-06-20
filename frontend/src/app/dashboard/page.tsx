@@ -19,6 +19,13 @@ export default function Dashboard() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [notification, setNotification] = useState<any | null>(null);
+  const [isWarmingUp, setIsWarmingUp] = useState(false);
+
+  // Health ping to keep Render backend awake while dashboard is open
+  useEffect(() => {
+    const interval = setInterval(() => fetch('/api/v1/health').catch(() => {}), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Ghost Replay State
   const [ghostTwins, setGhostTwins] = useState<any[]>([]);
@@ -46,9 +53,13 @@ export default function Dashboard() {
 
   // Fetch incidents logic
   useEffect(() => {
+    const timeoutId = setTimeout(() => setIsWarmingUp(true), 2000);
+
     fetch(`/api/v1/incidents?demo=${isDemoMode}&t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
+        clearTimeout(timeoutId);
+        setIsWarmingUp(false);
         if (isDemoMode && data.length > 4) {
           // In demo mode, take first 4 for map
           setIncidents(data.slice(0, 4));
@@ -78,12 +89,21 @@ export default function Dashboard() {
             index++;
           }, 10000);
           
-          return () => clearInterval(interval);
+          return () => {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+          };
         } else {
           setIncidents(data);
         }
       })
-      .catch(console.error);
+      .catch(e => {
+        clearTimeout(timeoutId);
+        setIsWarmingUp(false);
+        console.error(e);
+      });
+      
+    return () => clearTimeout(timeoutId);
   }, [isDemoMode]);
 
   const toggleDemoMode = () => {
@@ -165,6 +185,20 @@ export default function Dashboard() {
 
       {/* ── NOTIFICATION TOAST ───────────────────────── */}
       <AnimatePresence>
+        {isWarmingUp && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 bg-[rgba(10,10,11,0.9)] border border-[#ffb320]/50 rounded-full px-6 py-3 shadow-[0_0_20px_rgba(255,179,32,0.15)] flex items-center gap-3 backdrop-blur-md"
+          >
+            <div className="w-4 h-4 rounded-full border-2 border-[#ffb320] border-t-transparent animate-spin" />
+            <div className="text-xs font-mono text-[#ffb320] uppercase tracking-widest font-bold">
+              Waking up AI Backend...
+            </div>
+          </motion.div>
+        )}
+        
         {notification && (
           <motion.div
             initial={{ opacity: 0, x: -50 }}
