@@ -10,6 +10,9 @@ interface Triage {
   tow_likely: boolean; diversion_needed: boolean; escalation_risk: boolean;
   is_peak: boolean; hour: number; day: string;
   risk_factors: string[]; closure_type: string;
+  chokepoint_warning?: boolean;
+  chokepoint_violations?: number;
+  chokepoint_severity?: string;
 }
 interface SimilarCase {
   id: string; junction: string; cause: string; duration_minutes: number;
@@ -87,6 +90,32 @@ function TriageTab({ data }: { data: Triage }) {
           ))}
         </div>
       </div>
+
+      {/* Chokepoint Warning */}
+      {data.chokepoint_warning && (
+        <div
+          className="rounded-xl p-3"
+          style={{
+            background: 'rgba(255,179,32,0.07)',
+            border: '1px solid rgba(255,179,32,0.3)',
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-sm">🅿</span>
+            <span
+              className="text-[10px] font-black tracking-widest uppercase"
+              style={{ color: '#ffb320' }}
+            >
+              {data.chokepoint_severity === 'SEVERE' ? '⚠ Severe Chokepoint' : '⚠ Chokepoint Nearby'}
+            </span>
+          </div>
+          <p className="text-[10px] font-mono leading-relaxed" style={{ color: '#d1a43a' }}>
+            {data.chokepoint_violations?.toLocaleString()} parking violations recorded within 1km.
+            Emergency vehicles dispatched through this zone may face significant delays.
+            Consider alternate routing.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

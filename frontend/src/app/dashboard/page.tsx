@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IncidentMap } from '@/components/IncidentMap';
 import { TriagePanel } from '@/components/TriagePanel';
 import { CommanderChat } from '@/components/CommanderChat';
+import { GhostFleetPanel } from '@/components/GhostFleetPanel';
+import { PenaltyZoneOverlay, PenaltyZoneToggle } from '@/components/PenaltyZoneOverlay';
 
 interface Incident {
   id: string; junction: string; lat: number; lng: number;
@@ -20,11 +22,31 @@ export default function Dashboard() {
   const [isGhostActive, setIsGhostActive] = useState(false);
   const [ghostEarlyFilter, setGhostEarlyFilter] = useState(false);
 
+  // Penalty Zone State
+  const [penaltyZonesVisible, setPenaltyZonesVisible] = useState(false);
+  const [penaltyZonesData, setPenaltyZonesData] = useState<any>(null);
+  const mapInstanceRef = useRef<any>(null);
+
   const handleSelectIncident = (inc: Incident | null) => {
     setSelected(inc);
     if (!inc) {
       setIsGhostActive(false);
       setGhostTwins([]);
+    }
+  };
+
+  const handleMapReady = (mapInstance: any) => {
+    mapInstanceRef.current = mapInstance;
+  };
+
+  // Fly map to a ghost fleet vehicle location
+  const handleGhostVehicleSelect = (lat: number, lng: number, id: string) => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    try {
+      map.flyTo({ center: [lng, lat], zoom: 15, speed: 1.2 });
+    } catch (_) {
+      try { map.setCenter([lng, lat]); } catch (__) {}
     }
   };
 
@@ -39,6 +61,8 @@ export default function Dashboard() {
           ghostTwins={ghostTwins}
           isGhostActive={isGhostActive}
           ghostEarlyFilter={ghostEarlyFilter}
+          onMapReady={handleMapReady}
+          penaltyZonesVisible={penaltyZonesVisible}
         />
       </div>
 
@@ -64,11 +88,27 @@ export default function Dashboard() {
           </a>
         </div>
 
-        {/* Right: hint */}
-        <div className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
-          Click any incident to begin triage
+        {/* Right: Penalty Zone Toggle + hint */}
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <PenaltyZoneToggle
+            isActive={penaltyZonesVisible}
+            onToggle={() => setPenaltyZonesVisible(v => !v)}
+            zonesData={penaltyZonesData}
+          />
+          <div className="text-[10px] font-mono text-gray-500 tracking-widest uppercase">
+            Click any incident to begin triage
+          </div>
         </div>
       </motion.div>
+
+      {/* ── GHOST FLEET PANEL (top-right) ────────────── */}
+      <GhostFleetPanel onSelectVehicle={handleGhostVehicleSelect} />
+
+      {/* ── PENALTY ZONE OVERLAY (map layer) ─────────── */}
+      <PenaltyZoneOverlay
+        mapInstance={mapInstanceRef.current}
+        isVisible={penaltyZonesVisible}
+      />
 
       {/* ── TRIAGE PANEL (slides in from right) ────────── */}
       <TriagePanel

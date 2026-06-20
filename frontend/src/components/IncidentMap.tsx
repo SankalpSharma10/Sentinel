@@ -18,9 +18,11 @@ interface Props {
   ghostTwins?: any[];
   isGhostActive?: boolean;
   ghostEarlyFilter?: boolean;
+  onMapReady?: (mapInstance: any) => void;
+  penaltyZonesVisible?: boolean;
 }
 
-export function IncidentMap({ onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false }: Props) {
+export function IncidentMap({ onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false }: Props) {
   const mapRef      = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -38,6 +40,7 @@ export function IncidentMap({ onSelectIncident, selectedId, ghostTwins = [], isG
         zoom: 11,
       });
       setMapLoaded(true);
+      if (onMapReady) onMapReady(mapInstance.current);
     } catch (e: any) { setError(e.message); }
   }
 

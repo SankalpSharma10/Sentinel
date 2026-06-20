@@ -128,6 +128,28 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
             tow_likely = False
             diversion_needed = False
 
+        # ── Chokepoint Proximity Check (Penalty Zone System) ──
+        # Cross-reference incident location against ParkGuard violation heatmap
+        chokepoint_warning = False
+        chokepoint_violations = 0
+        chokepoint_severity = "NONE"
+        try:
+            grid_lat = round(float(d['lat']), 2)
+            grid_lng = round(float(d['lng']), 2)
+            cp_row = analytics_service.con.execute(f"""
+                SELECT COUNT(*) as violations
+                FROM violations
+                WHERE ROUND(latitude, 2) BETWEEN {grid_lat - 0.01} AND {grid_lat + 0.01}
+                AND ROUND(longitude, 2) BETWEEN {grid_lng - 0.01} AND {grid_lng + 0.01}
+            """).fetchone()
+            if cp_row and cp_row[0] >= 2000:
+                chokepoint_warning = True
+                chokepoint_violations = int(cp_row[0])
+                chokepoint_severity = "SEVERE" if chokepoint_violations >= 5000 else "MODERATE"
+                risk_factors.append(f"Static Chokepoint zone — {chokepoint_violations:,} parking violations nearby. Emergency routing may be compromised.")
+        except Exception as cp_e:
+            print(f"Chokepoint check error: {cp_e}")
+
         return {
             "incident_id": incident_id,
             "junction": d['junction'],
@@ -136,7 +158,7 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
             "lng": float(d['lng']),
             "risk_level": risk_level,
             "risk_score": round(confidence * 100),
-            "duration_bucket": DURATION_LABELS.get(duration_cls, "30 – 90 min"),
+            "duration_bucket": DURATION_LABELS.get(duration_cls, "30 - 90 min"),
             "duration_cls": duration_cls,
             "tow_likely": tow_likely,
             "diversion_needed": diversion_needed,
@@ -146,6 +168,9 @@ def get_triage(incident_id: str) -> Dict[str, Any]:
             "day": day_name,
             "risk_factors": risk_factors,
             "closure_type": d['closure_type'],
+            "chokepoint_warning": chokepoint_warning,
+            "chokepoint_violations": chokepoint_violations,
+            "chokepoint_severity": chokepoint_severity,
         }
 
     except HTTPException:
