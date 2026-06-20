@@ -13,6 +13,7 @@ const RISK_COLORS: Record<string, string> = {
 };
 
 interface Props {
+  incidents: Incident[];
   onSelectIncident: (incident: Incident) => void;
   selectedId: string | null;
   ghostTwins?: any[];
@@ -22,11 +23,10 @@ interface Props {
   penaltyZonesVisible?: boolean;
 }
 
-export function IncidentMap({ onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false }: Props) {
+export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false }: Props) {
   const mapRef      = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [error,     setError]     = useState<string | null>(null);
   const [dots, setDots] = useState<Array<{ inc: Incident; x: number; y: number }>>([]);
 
@@ -71,14 +71,7 @@ export function IncidentMap({ onSelectIncident, selectedId, ghostTwins = [], isG
     document.head.appendChild(script);
   }, [mapLoaded]);
 
-  // Fetch incidents after map is ready
-  useEffect(() => {
-    if (!mapLoaded) return;
-    fetch(`/api/v1/incidents?t=${Date.now()}`)
-      .then(r => r.json())
-      .then(setIncidents)
-      .catch(console.error);
-  }, [mapLoaded]);
+  // (Fetch logic removed; incidents are now passed in via props)
 
   const project = useCallback(() => {
     const map = mapInstance.current;

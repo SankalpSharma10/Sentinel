@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IncidentMap } from '@/components/IncidentMap';
 import { TriagePanel } from '@/components/TriagePanel';
@@ -10,12 +10,15 @@ import { PenaltyZoneOverlay, PenaltyZoneToggle } from '@/components/PenaltyZoneO
 
 interface Incident {
   id: string; junction: string; lat: number; lng: number;
-  type: string; risk_level: string; risk_score: number;
+  type: string; risk_level: 'Low' | 'Medium' | 'High'; risk_score: number;
   tow_likely: boolean; duration_bucket: string;
 }
 
 export default function Dashboard() {
   const [selected, setSelected] = useState<Incident | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [notification, setNotification] = useState<any | null>(null);
 
   // Ghost Replay State
   const [ghostTwins, setGhostTwins] = useState<any[]>([]);
@@ -41,6 +44,54 @@ export default function Dashboard() {
     setMapInstance(map); // triggers re-render so PenaltyZoneOverlay gets the real map
   };
 
+  // Fetch incidents logic
+  useEffect(() => {
+    fetch(`/api/v1/incidents?demo=${isDemoMode}&t=${Date.now()}`)
+      .then(r => r.json())
+      .then(data => {
+        if (isDemoMode && data.length >= 5) {
+          // In demo mode, take first 4 for map, save 5th for pop-up
+          setIncidents(data.slice(0, 4));
+          
+          // 10 second delay before pop-up
+          const timer = setTimeout(() => {
+            const popupInc = data[4];
+            setIncidents(prev => [...prev, popupInc]);
+            
+            // Show notification
+            setNotification({
+              title: "NEW INCIDENT DETECTED",
+              type: popupInc.type,
+              junction: popupInc.junction,
+              level: popupInc.risk_level
+            });
+            setTimeout(() => setNotification(null), 8000);
+            
+            // Fly map to popup incident
+            if (mapInstanceRef.current) {
+              try { mapInstanceRef.current.flyTo({ center: [popupInc.lng, popupInc.lat], zoom: 14, speed: 1.2 }); } catch (_) {}
+            }
+          }, 10000);
+          
+          return () => clearTimeout(timer);
+        } else {
+          setIncidents(data);
+        }
+      })
+      .catch(console.error);
+  }, [isDemoMode]);
+
+  const toggleDemoMode = () => {
+    setIsDemoMode(prev => {
+      const next = !prev;
+      if (next) {
+        setIncidents([]); // Clear map immediately
+        setSelected(null);
+      }
+      return next;
+    });
+  };
+
   // Fly map to a ghost fleet vehicle location
   const handleGhostVehicleSelect = (lat: number, lng: number, id: string) => {
     const map = mapInstanceRef.current;
@@ -58,6 +109,7 @@ export default function Dashboard() {
       {/* ── FULL BLEED MAP ─────────────────────────────── */}
       <div className="absolute inset-0 z-0">
         <IncidentMap
+          incidents={incidents}
           onSelectIncident={handleSelectIncident}
           selectedId={selected?.id ?? null}
           ghostTwins={ghostTwins}
@@ -85,6 +137,9 @@ export default function Dashboard() {
               <div className="text-[9px] font-mono text-gray-400 tracking-widest uppercase">Incident Triage Copilot · BTP</div>
             </div>
           </div>
+          <button onClick={toggleDemoMode} className={`px-3 py-1.5 rounded-md border text-[10px] font-mono tracking-widest uppercase transition-colors flex items-center gap-2 shadow-sm cursor-pointer ${isDemoMode ? 'bg-[#ff2a2a]/20 border-[#ff2a2a]/50 text-[#ff2a2a]' : 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300 hover:text-white'}`}>
+            <span>{isDemoMode ? '⏹' : '▶'}</span> {isDemoMode ? 'End Demo' : 'Demo Mode'}
+          </button>
           <a href="/parkguard" className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-mono tracking-widest uppercase text-gray-300 hover:text-white transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
             <span className="text-[#ff3b30]">🛡️</span> ParkGuard
           </a>
@@ -102,6 +157,33 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      {/* ── NOTIFICATION TOAST ───────────────────────── */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            className="absolute top-24 left-6 z-40 bg-[rgba(10,10,11,0.9)] border border-[#ff2a2a]/50 rounded-xl p-4 shadow-[0_0_20px_rgba(255,42,42,0.2)] flex gap-4 items-start max-w-sm backdrop-blur-md"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#ff2a2a]/20 flex items-center justify-center text-[#ff2a2a] text-lg shrink-0">
+              ⚠
+            </div>
+            <div>
+              <div className="text-[10px] font-mono text-[#ff2a2a] uppercase tracking-widest font-bold mb-1">
+                {notification.title}
+              </div>
+              <div className="text-sm font-bold text-white font-mono leading-tight mb-1">
+                {notification.type}
+              </div>
+              <div className="text-xs text-gray-400 font-mono">
+                {notification.junction}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── GHOST FLEET PANEL (top-right) ────────────── */}
       <GhostFleetPanel onSelectVehicle={handleGhostVehicleSelect} />
@@ -125,6 +207,10 @@ export default function Dashboard() {
         isGhostActive={isGhostActive}
         ghostEarlyFilter={ghostEarlyFilter}
         onToggleGhostFilter={setGhostEarlyFilter}
+        onResolve={(id) => {
+          setIncidents(prev => prev.filter(i => i.id !== id));
+          setSelected(null);
+        }}
       />
 
       {/* ── AI COMMANDER CHAT (Fixed on Left) ────────── */}

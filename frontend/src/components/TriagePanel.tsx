@@ -203,10 +203,23 @@ function SimilarTab({ cases, onStartGhostReplay, onStopGhostReplay, isGhostActiv
 import { GreenWaveMap } from './GreenWaveMap';
 
 // ─── Tab 3: Playbook ─────────────────────────────────────────────────────────
-function PlaybookTab({ data, incidentId, incidentMeta }: { data: PlaybookData; incidentId: string; incidentMeta: any }) {
+function PlaybookTab({ data, incidentId, incidentMeta, onResolve }: { data: PlaybookData; incidentId: string; incidentMeta: any, onResolve?: (id: string) => void }) {
   const p = data.recommended_playbook;
   const [diversionResult, setDiversionResult] = useState<any>(null);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [resolvingSeconds, setResolvingSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (resolvingSeconds === null) return;
+    if (resolvingSeconds <= 0) {
+      if (onResolve) onResolve(incidentId);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setResolvingSeconds(prev => prev! - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [resolvingSeconds, incidentId, onResolve]);
 
   const runDiversion = async () => {
     const lat = incidentMeta?.lat || 12.917;
@@ -263,6 +276,19 @@ function PlaybookTab({ data, incidentId, incidentMeta }: { data: PlaybookData; i
           ETA: {diversionResult.eta_minutes} min · {diversionResult.junctions_cleared} junctions cleared
         </div>
       )}
+
+      {/* Resolve Incident trigger */}
+      <button 
+        onClick={() => { if (resolvingSeconds === null) setResolvingSeconds(30); }}
+        disabled={resolvingSeconds !== null}
+        className={`w-full py-3 rounded-xl transition-all text-xs font-bold tracking-widest uppercase font-mono cursor-pointer ${
+          resolvingSeconds !== null
+            ? 'bg-gray-800/50 border border-gray-700/50 text-gray-400 cursor-not-allowed'
+            : 'bg-[#4A6CF7]/10 border border-[#4A6CF7]/30 hover:bg-[#4A6CF7]/20 text-[#4A6CF7]'
+        }`}
+      >
+        {resolvingSeconds !== null ? `Resolving in ${resolvingSeconds}s...` : '✓ Resolve Incident'}
+      </button>
     </div>
   );
 }
@@ -277,11 +303,12 @@ interface TriagePanelProps {
   isGhostActive: boolean;
   ghostEarlyFilter: boolean;
   onToggleGhostFilter: (val: boolean) => void;
+  onResolve?: (id: string) => void;
 }
 
 const TABS = ['Triage', 'Similar Cases', 'Playbook'];
 
-export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostReplay, onStopGhostReplay, isGhostActive, ghostEarlyFilter, onToggleGhostFilter }: TriagePanelProps) {
+export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostReplay, onStopGhostReplay, isGhostActive, ghostEarlyFilter, onToggleGhostFilter, onResolve }: TriagePanelProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [triage, setTriage]       = useState<Triage | null>(null);
   const [similar, setSimilar]     = useState<SimilarCase[]>([]);
@@ -424,7 +451,7 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
                   </div>
                 )}
                 {activeTab === 1 && <SimilarTab cases={similar} onStartGhostReplay={() => onStartGhostReplay(similar)} onStopGhostReplay={onStopGhostReplay} isGhostActive={isGhostActive} ghostEarlyFilter={ghostEarlyFilter} onToggleGhostFilter={onToggleGhostFilter} />}
-                {activeTab === 2 && playbook  && <PlaybookTab data={playbook} incidentId={incidentId} incidentMeta={incidentMeta} />}
+                {activeTab === 2 && playbook  && <PlaybookTab data={playbook} incidentId={incidentId} incidentMeta={incidentMeta} onResolve={onResolve} />}
               </>
             )}
           </div>

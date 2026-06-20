@@ -54,20 +54,31 @@ def run_models(lat, lng, start_datetime):
     }
 
 @router.get("/incidents")
-def get_incidents() -> List[Dict[str, Any]]:
+def get_incidents(demo: bool = False) -> List[Dict[str, Any]]:
     """Returns all incidents with pre-computed risk level for map plotting."""
     try:
-        rows = analytics_service.con.execute("""
+        if demo:
+            # Return exactly 5 curated incidents (4 initial + 1 pop-up)
+            # FKID000126: Accident
+            # FKID000000: Vehicle Breakdown
+            # FKID000001: Vehicle Breakdown
+            # FKID000073: Traffic no problem
+            # FKID000097: Tree branch fall (Kannada text)
+            where_clause = "id IN ('FKID000126', 'FKID000000', 'FKID000001', 'FKID000073', 'FKID000097')"
+            limit_clause = "LIMIT 5"
+        else:
+            where_clause = "latitude IS NOT NULL AND longitude IS NOT NULL AND event_type = 'unplanned'"
+            limit_clause = "ORDER BY random() LIMIT 40"
+
+        rows = analytics_service.con.execute(f"""
             SELECT id,
                    COALESCE(NULLIF(junction, 'NULL'), NULLIF(police_station, 'NULL'), 'Geo-Point (' || ROUND(latitude, 4) || ', ' || ROUND(longitude, 4) || ')') as junction,
                    latitude, longitude, event_cause as type,
                    event_type, start_datetime,
                    COALESCE(NULLIF(description, 'NULL'), '') as description
             FROM historical_events
-            WHERE latitude IS NOT NULL AND longitude IS NOT NULL
-            AND event_type = 'unplanned'
-            ORDER BY random()
-            LIMIT 40
+            WHERE {where_clause}
+            {limit_clause}
         """).fetchall()
         cols = ['id','junction','lat','lng','type','event_type','start_datetime','description']
         results = []
