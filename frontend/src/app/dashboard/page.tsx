@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [ghostTwins, setGhostTwins] = useState<any[]>([]);
   const [isGhostActive, setIsGhostActive] = useState(false);
   const [ghostEarlyFilter, setGhostEarlyFilter] = useState(false);
+  const [selectedGhostVehicle, setSelectedGhostVehicle] = useState<{lat: number, lng: number, id: string} | null>(null);
 
   // Penalty Zone State — MUST be useState (not useRef) so React re-renders when map loads
   const [penaltyZonesVisible, setPenaltyZonesVisible] = useState(false);
@@ -40,6 +41,7 @@ export default function Dashboard() {
 
   const handleSelectIncident = (inc: Incident | null) => {
     setSelected(inc);
+    setSelectedGhostVehicle(null);
     if (!inc) {
       setIsGhostActive(false);
       setGhostTwins([]);
@@ -112,6 +114,7 @@ export default function Dashboard() {
       if (next) {
         setIncidents([]); // Clear map immediately
         setSelected(null);
+        setSelectedGhostVehicle(null);
       }
       return next;
     });
@@ -119,10 +122,11 @@ export default function Dashboard() {
 
   // Fly map to a ghost fleet vehicle location
   const handleGhostVehicleSelect = (lat: number, lng: number, id: string) => {
+    setSelectedGhostVehicle({ lat, lng, id });
     const map = mapInstanceRef.current;
     if (!map) return;
     try {
-      map.flyTo({ center: [lng, lat], zoom: 15, speed: 1.2 });
+      map.flyTo({ center: [lng, lat], zoom: 16, speed: 1.2 });
     } catch (_) {
       try { map.setCenter([lng, lat]); } catch (__) {}
     }
@@ -142,6 +146,7 @@ export default function Dashboard() {
           ghostEarlyFilter={ghostEarlyFilter}
           onMapReady={handleMapReady}
           penaltyZonesVisible={penaltyZonesVisible}
+          selectedGhostVehicle={selectedGhostVehicle}
         />
       </div>
 

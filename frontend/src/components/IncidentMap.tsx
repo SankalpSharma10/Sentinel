@@ -21,14 +21,16 @@ interface Props {
   ghostEarlyFilter?: boolean;
   onMapReady?: (mapInstance: any) => void;
   penaltyZonesVisible?: boolean;
+  selectedGhostVehicle?: {lat: number, lng: number, id: string} | null;
 }
 
-export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false }: Props) {
+export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false, selectedGhostVehicle = null }: Props) {
   const mapRef      = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [dots, setDots] = useState<Array<{ inc: Incident; x: number; y: number }>>([]);
+  const [ghostVehicleDot, setGhostVehicleDot] = useState<{x: number, y: number} | null>(null);
 
   function createMap() {
     // @ts-ignore
@@ -85,8 +87,21 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
           return { inc, x: pt.x, y: pt.y };
         }));
       } catch (_) {}
+    } else {
+      setDots([]);
     }
-  }, [incidents]);
+
+    if (selectedGhostVehicle) {
+      try {
+        const pt = map.project([selectedGhostVehicle.lng, selectedGhostVehicle.lat]);
+        setGhostVehicleDot({ x: pt.x, y: pt.y });
+      } catch (_) {
+        setGhostVehicleDot(null);
+      }
+    } else {
+      setGhostVehicleDot(null);
+    }
+  }, [incidents, selectedGhostVehicle]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -215,13 +230,32 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
                     <animate attributeName="opacity" values="0.7;0;0.7" dur="2s" repeatCount="indefinite"/>
                   </circle>
                 )}
-                <circle cx={x} cy={y} r={sel ? r + 3 : r}
+                  <circle cx={x} cy={y} r={sel ? r + 3 : r}
                   fill={color} stroke="rgba(255,255,255,0.8)"
                   strokeWidth={sel ? 2.5 : 1.5}
                   filter={`url(#g${inc.risk_level === 'High' ? 'H' : 'M'})`} />
               </g>
             );
           })}
+
+          {/* GHOST VEHICLE MARKER */}
+          {ghostVehicleDot && selectedGhostVehicle && (
+            <g transform={`translate(${ghostVehicleDot.x}, ${ghostVehicleDot.y})`} style={{ pointerEvents: 'all' }}>
+              <circle cx="0" cy="0" r="16" fill="#4A6CF7" fillOpacity="0.2" />
+              <circle cx="0" cy="0" r="12" fill="#4A6CF7" stroke="#ffffff" strokeWidth="2" />
+              <path d="M-5 -2h6v5h-6z m7 1h2l1 2v2h-3z" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
+              <circle cx="-3" cy="4" r="1.5" fill="#fff" />
+              <circle cx="3" cy="4" r="1.5" fill="#fff" />
+              
+              {/* Tooltip Label */}
+              <g transform="translate(18, -12)">
+                <rect x="0" y="0" width="80" height="24" rx="4" fill="rgba(10,10,11,0.9)" stroke="#4A6CF7" strokeWidth="1" />
+                <text x="8" y="16" fill="#fff" fontSize="10" fontFamily="monospace" fontWeight="bold">
+                  {selectedGhostVehicle.id}
+                </text>
+              </g>
+            </g>
+          )}
         </svg>
       )}
 
