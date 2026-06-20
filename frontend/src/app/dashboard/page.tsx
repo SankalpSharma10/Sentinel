@@ -49,13 +49,17 @@ export default function Dashboard() {
     fetch(`/api/v1/incidents?demo=${isDemoMode}&t=${Date.now()}`)
       .then(r => r.json())
       .then(data => {
-        if (isDemoMode && data.length >= 5) {
-          // In demo mode, take first 4 for map, save 5th for pop-up
+        if (isDemoMode && data.length > 4) {
+          // In demo mode, take first 4 for map
           setIncidents(data.slice(0, 4));
           
-          // 10 second delay before pop-up
-          const timer = setTimeout(() => {
-            const popupInc = data[4];
+          let index = 4;
+          const interval = setInterval(() => {
+            if (index >= data.length) {
+              clearInterval(interval);
+              return;
+            }
+            const popupInc = data[index];
             setIncidents(prev => [...prev, popupInc]);
             
             // Show notification
@@ -71,9 +75,10 @@ export default function Dashboard() {
             if (mapInstanceRef.current) {
               try { mapInstanceRef.current.flyTo({ center: [popupInc.lng, popupInc.lat], zoom: 14, speed: 1.2 }); } catch (_) {}
             }
+            index++;
           }, 10000);
           
-          return () => clearTimeout(timer);
+          return () => clearInterval(interval);
         } else {
           setIncidents(data);
         }

@@ -58,14 +58,11 @@ def get_incidents(demo: bool = False) -> List[Dict[str, Any]]:
     """Returns all incidents with pre-computed risk level for map plotting."""
     try:
         if demo:
-            # Return exactly 5 curated incidents (4 initial + 1 pop-up)
-            # FKID000126: Accident
-            # FKID000000: Vehicle Breakdown
-            # FKID000001: Vehicle Breakdown
-            # FKID000073: Traffic no problem
-            # FKID000097: Tree branch fall (Kannada text)
-            where_clause = "id IN ('FKID000126', 'FKID000000', 'FKID000001', 'FKID000073', 'FKID000097')"
-            limit_clause = "LIMIT 5"
+            # Return 12 robust incidents (4 initial + 8 pop-ups)
+            # We filter for accidents, breakdowns, water logging with long descriptions
+            # This guarantees rich Playbook and Triage data.
+            where_clause = "latitude IS NOT NULL AND longitude IS NOT NULL AND length(description) > 10 AND event_cause IN ('accident', 'vehicle_breakdown', 'water_logging')"
+            limit_clause = "ORDER BY random() LIMIT 12"
         else:
             where_clause = "latitude IS NOT NULL AND longitude IS NOT NULL AND event_type = 'unplanned'"
             limit_clause = "ORDER BY random() LIMIT 40"
