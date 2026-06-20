@@ -36,7 +36,7 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
     if (!M?.Map || !mapRef.current) { setError('Map SDK unavailable.'); return; }
     try {
       mapInstance.current = new M.Map(mapRef.current, {
-        center: [77.5946, 12.9716], // [lng, lat] — Mapbox GL JS array format (tiles confirmed working)
+        center: [12.9716, 77.5946], // [lat, lng] - Mappls uses Leaflet format
         zoom: 11,
       });
       setMapLoaded(true);
