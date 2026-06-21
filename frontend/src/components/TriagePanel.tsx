@@ -318,54 +318,82 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
 
   useEffect(() => {
     if (!incidentId) return;
+    let isCancelled = false;
+    
     setActiveTab(0); setTriage(null); setSimilar([]); setPlaybook(null);
     setLoading(true); setFetchError(null);
 
-    // Fetch triage first, then use its output to fetch playbook
-    // Fetch triage first, then use its output to fetch playbook
-    fetch(`/api/v1/triage/${incidentId}`)
-      .then(r => {
-        if (!r.ok) throw new Error('Failed to fetch triage');
-        return r.json();
-      })
-      .then((t: Triage) => {
-        setTriage(t);
-        setLoading(false);
+    const fetchWithRetry = async (retries = 10, delay = 3000) => {
+      for (let i = 0; i < retries; i++) {
+        if (isCancelled) return;
+        try {
+          const r = await fetch(`/api/v1/triage/${incidentId}`);
+          if (!r.ok) throw new Error('Failed to fetch triage');
+          const t: Triage = await r.json();
+          if (isCancelled) return;
+          
+          setTriage(t);
+          setFetchError(null);
+          setLoading(false);
 
-        // Parallel: similar cases + playbook
-        fetch(`/api/v1/similar-incidents/${incidentId}`)
-          .then(r => r.ok ? r.json() : [])
-          .then(setSimilar)
-          .catch(console.error);
+          // Parallel: similar cases + playbook
+          fetch(`/api/v1/similar-incidents/${incidentId}`)
+            .then(res => res.ok ? res.json() : [])
+            .then(data => { if (!isCancelled) setSimilar(data); })
+            .catch(console.error);
 
-        const params = new URLSearchParams({
-          risk_level: t.risk_level,
-          duration_cls: String(t.duration_cls),
-          tow_likely: String(t.tow_likely),
-          diversion_needed: String(t.diversion_needed),
-          escalation_risk: String(t.escalation_risk),
-          event_type: t.type || '',
-        });
-        fetch(`/api/v1/playbook/${incidentId}?${params}`)
-          .then(r => r.ok ? r.json() : null)
-          .then(setPlaybook)
-          .catch(console.error);
-      })
-      .catch(err => {
-        console.error('Triage fetch error:', err);
-        setFetchError('Backend is warming up. Please wait a moment and try again.');
-        setLoading(false);
-      });
+          const params = new URLSearchParams({
+            risk_level: t.risk_level,
+            duration_cls: String(t.duration_cls),
+            tow_likely: String(t.tow_likely),
+            diversion_needed: String(t.diversion_needed),
+            escalation_risk: String(t.escalation_risk),
+            event_type: t.type || '',
+          });
+          fetch(`/api/v1/playbook/${incidentId}?${params}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (!isCancelled) setPlaybook(data); })
+            .catch(console.error);
+            
+          return; // Success, exit loop
+        } catch (err) {
+          console.error(`Triage fetch attempt ${i + 1} failed:`, err);
+          if (i === retries - 1) {
+            if (!isCancelled) {
+              setFetchError('Backend timeout. Please click Retry.');
+              setLoading(false);
+            }
+          } else {
+            if (!isCancelled && i === 0) {
+              // Only set this error message on the first failure so the UI shows the warming up state
+              setFetchError('Waking up AI Backend... Please wait.');
+            }
+            await new Promise(res => setTimeout(res, delay));
+            delay = Math.min(delay * 1.5, 10000); // Max 10s delay between retries
+          }
+        }
+      }
+    };
+
+    fetchWithRetry();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [incidentId]);
 
   const retryFetch = () => {
     if (!incidentId) return;
-    setFetchError(null);
+    setFetchError('Waking up AI Backend... Please wait.');
     setTriage(null);
     setLoading(true);
+    
+    // Trigger a re-render which will re-run the useEffect because we can just rely on the same retry logic!
+    // But since incidentId hasn't changed, useEffect won't naturally re-run.
+    // Instead, we just call a simple one-off retry here.
     fetch(`/api/v1/triage/${incidentId}`)
       .then(r => { if (!r.ok) throw new Error('Failed'); return r.json(); })
-      .then((t: Triage) => { setTriage(t); setLoading(false); })
+      .then((t: Triage) => { setTriage(t); setFetchError(null); setLoading(false); })
       .catch(err => { setFetchError('Still warming up. Try again in 30 seconds.'); setLoading(false); });
   };
 
@@ -430,16 +458,25 @@ export function TriagePanel({ incidentId, incidentMeta, onClose, onStartGhostRep
                 <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest animate-pulse">Running XGBoost Triage…</p>
               </div>
             )}
-            {!loading && fetchError && (
-              <div className="flex flex-col items-center justify-center h-48 gap-4 px-6">
-                <div className="w-12 h-12 rounded-full bg-[#ff2a2a]/10 border border-[#ff2a2a]/20 flex items-center justify-center text-xl">⚡</div>
-                <p className="text-[10px] font-mono text-gray-400 text-center leading-relaxed">{fetchError}</p>
-                <button
-                  onClick={retryFetch}
-                  className="px-5 py-2 rounded-lg bg-[#4A6CF7]/15 border border-[#4A6CF7]/30 text-[#4A6CF7] text-[10px] font-mono font-bold tracking-widest uppercase hover:bg-[#4A6CF7]/25 transition-all cursor-pointer"
-                >
-                  ↻ Retry Triage
-                </button>
+            {/* ERROR / WARMING UP STATE */}
+            {fetchError && !triage && (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4 mt-10">
+                <div className="w-10 h-10 rounded-full bg-[#ffb320]/10 flex items-center justify-center text-[#ffb320] mb-2">
+                  <span className="text-xl">⚡</span>
+                </div>
+                <p className="text-[10px] font-mono text-gray-400 text-center uppercase tracking-widest leading-relaxed">
+                  {fetchError}
+                </p>
+                {/* Only show the retry button if loading actually failed completely (i.e. not actively loading/retrying) */}
+                {!loading && (
+                  <button onClick={retryFetch} className="mt-4 px-6 py-2 rounded-lg bg-[#4A6CF7]/10 hover:bg-[#4A6CF7]/20 border border-[#4A6CF7]/30 text-[#4A6CF7] text-[10px] font-mono tracking-widest uppercase transition-colors">
+                    ↻ Retry Triage
+                  </button>
+                )}
+                {/* Show a spinner while it's in the automatic retry loop */}
+                {loading && (
+                  <div className="mt-4 w-5 h-5 rounded-full border-2 border-[#ffb320] border-t-transparent animate-spin" />
+                )}
               </div>
             )}
             {!loading && !fetchError && (
