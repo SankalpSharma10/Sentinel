@@ -27,6 +27,16 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch Penalty Zones data once on mount
+  useEffect(() => {
+    fetch('/api/v1/penalty-zones')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.zones) setPenaltyZonesData(data);
+      })
+      .catch(console.error);
+  }, []);
+
   // Ghost Replay State
   const [ghostTwins, setGhostTwins] = useState<any[]>([]);
   const [isGhostActive, setIsGhostActive] = useState(false);
@@ -236,6 +246,7 @@ export default function Dashboard() {
       <PenaltyZoneOverlay
         mapInstance={mapInstance}
         isVisible={penaltyZonesVisible}
+        zonesData={penaltyZonesData}
       />
 
       {/* ── TRIAGE PANEL (slides in from right) ────────── */}

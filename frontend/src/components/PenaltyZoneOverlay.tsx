@@ -24,6 +24,7 @@ interface PenaltyZonesData {
 interface Props {
   mapInstance: any;
   isVisible: boolean;
+  zonesData: PenaltyZonesData | null;
 }
 
 const SEVERITY_STYLE = {
@@ -32,40 +33,31 @@ const SEVERITY_STYLE = {
   LOW:      { color: '#f59e0b', glow: 'rgba(245,158,11,0.2)',  r: 10, opacity: 0.75 },
 };
 
-export function PenaltyZoneOverlay({ mapInstance, isVisible }: Props) {
-  const [data, setData]     = useState<PenaltyZonesData | null>(null);
+export function PenaltyZoneOverlay({ mapInstance, isVisible, zonesData }: Props) {
   const [dots, setDots]     = useState<Array<{ zone: PenaltyZone; x: number; y: number }>>([]);
   const [hovered, setHovered] = useState<number | null>(null);
 
-  // Fetch zone data once
-  useEffect(() => {
-    fetch('/api/v1/penalty-zones')
-      .then(r => r.ok ? r.json() : null)
-      .then(json => { if (json) setData(json); })
-      .catch(console.error);
-  }, []);
-
   // Project geo-coords → screen pixels
   const project = useCallback(() => {
-    if (!mapInstance || !data?.zones.length) return;
+    if (!mapInstance || !zonesData?.zones?.length) return;
     try {
       setDots(
-        data.zones.map(zone => {
-          const pt = mapInstance.project([zone.lng, zone.lat]);
+        zonesData.zones.map(zone => {
+          const pt = mapInstance.project([zone.lng, zone.lat]); // Mapbox/Mappls format [lng, lat]
           return { zone, x: pt.x, y: pt.y };
         })
       );
     } catch (_) {}
-  }, [mapInstance, data]);
+  }, [mapInstance, zonesData]);
 
   // Re-project on every map move/zoom
   useEffect(() => {
-    if (!mapInstance || !data) return;
+    if (!mapInstance || !zonesData) return;
     project();
     const evts = ['move', 'zoom', 'rotate', 'pitch', 'moveend', 'zoomend'];
     evts.forEach(e => { try { mapInstance.on(e, project); } catch (_) {} });
     return () => { evts.forEach(e => { try { mapInstance.off(e, project); } catch (_) {} }); };
-  }, [mapInstance, data, project]);
+  }, [mapInstance, zonesData, project]);
 
   if (!isVisible || dots.length === 0) return null;
 
