@@ -12,6 +12,23 @@ const RISK_COLORS: Record<string, string> = {
   High: '#ff2a2a', Medium: '#ffb320', Low: '#22c55e',
 };
 
+interface PenaltyZone {
+  lat: number; lng: number;
+  total_violations: number;
+  severity: 'SEVERE' | 'MODERATE' | 'LOW';
+  color: string;
+}
+
+interface PenaltyZonesData {
+  zones: PenaltyZone[];
+}
+
+const PZ_STYLE: Record<string, { color: string; r: number }> = {
+  SEVERE:   { color: '#ff2a2a', r: 22 },
+  MODERATE: { color: '#ffb320', r: 15 },
+  LOW:      { color: '#f59e0b', r: 10 },
+};
+
 interface Props {
   incidents: Incident[];
   onSelectIncident: (incident: Incident) => void;
@@ -21,15 +38,17 @@ interface Props {
   ghostEarlyFilter?: boolean;
   onMapReady?: (mapInstance: any) => void;
   penaltyZonesVisible?: boolean;
+  penaltyZonesData?: PenaltyZonesData | null;
   selectedGhostVehicle?: {lat: number, lng: number, id: string} | null;
 }
 
-export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false, selectedGhostVehicle = null }: Props) {
+export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwins = [], isGhostActive = false, ghostEarlyFilter = false, onMapReady, penaltyZonesVisible = false, penaltyZonesData = null, selectedGhostVehicle = null }: Props) {
   const mapRef      = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [dots, setDots] = useState<Array<{ inc: Incident; x: number; y: number }>>([]);
+  const [penaltyDots, setPenaltyDots] = useState<Array<{ zone: PenaltyZone; x: number; y: number }>>([]);
   const [ghostVehicleDot, setGhostVehicleDot] = useState<{x: number, y: number} | null>(null);
 
   function createMap() {
@@ -91,6 +110,18 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
       setDots([]);
     }
 
+    // Project penalty zones
+    if (penaltyZonesData?.zones?.length) {
+      try {
+        setPenaltyDots(penaltyZonesData.zones.map(zone => {
+          const pt = map.project([zone.lng, zone.lat]);
+          return { zone, x: pt.x, y: pt.y };
+        }));
+      } catch (_) {}
+    } else {
+      setPenaltyDots([]);
+    }
+
     if (selectedGhostVehicle) {
       try {
         const pt = map.project([selectedGhostVehicle.lng, selectedGhostVehicle.lat]);
@@ -101,7 +132,7 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
     } else {
       setGhostVehicleDot(null);
     }
-  }, [incidents, selectedGhostVehicle]);
+  }, [incidents, penaltyZonesData, selectedGhostVehicle]);
 
   useEffect(() => {
     if (!mapLoaded) return;
@@ -155,8 +186,8 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
         style={{ width: '100%', height: '100%' }}
       ></div>
 
-      {/* SVG overlay — rendering dots AND ghost ripples */}
-      {mapLoaded && dots.length > 0 && (
+      {/* SVG overlay — penalty zones + incident dots + ghost ripples */}
+      {mapLoaded && (dots.length > 0 || (penaltyZonesVisible && penaltyDots.length > 0)) && (
         <svg className="absolute inset-0 pointer-events-none z-10"
           style={{ width: '100%', height: '100%', overflow: 'visible' }}>
           <defs>
@@ -168,7 +199,44 @@ export function IncidentMap({ incidents, onSelectIncident, selectedId, ghostTwin
               <feGaussianBlur stdDeviation="2" result="b"/>
               <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
+            <filter id="pz-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="5" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
           </defs>
+
+          {/* PENALTY ZONE CIRCLES — rendered first so they sit below incidents */}
+          {penaltyZonesVisible && penaltyDots.map(({ zone, x, y }, i) => {
+            const s = PZ_STYLE[zone.severity] ?? PZ_STYLE.LOW;
+            const countStr = zone.total_violations >= 1000
+              ? `${(zone.total_violations / 1000).toFixed(1)}k`
+              : zone.total_violations.toString();
+            return (
+              <g key={`pz-${i}`}>
+                {/* Outer halo */}
+                <circle cx={x} cy={y} r={s.r + 10} fill={s.color} opacity={0.06} />
+                {/* Main circle */}
+                <circle cx={x} cy={y} r={s.r} fill={s.color} opacity={0.18}
+                  stroke={s.color} strokeWidth={1.5} strokeOpacity={0.7}
+                  filter="url(#pz-glow)" />
+                {/* Animated pulse ring for SEVERE */}
+                {zone.severity === 'SEVERE' && (
+                  <circle cx={x} cy={y} r={s.r} fill="none" stroke={s.color} strokeWidth="1" strokeOpacity="0.5">
+                    <animate attributeName="r" values={`${s.r};${s.r + 10};${s.r}`} dur="2.5s" repeatCount="indefinite"/>
+                    <animate attributeName="stroke-opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite"/>
+                  </circle>
+                )}
+                {/* Label badge */}
+                <g transform={`translate(${x + s.r + 4}, ${y - 9})`} style={{ pointerEvents: 'none' }}>
+                  <rect x={0} y={0} width={54} height={18} rx={4}
+                    fill="rgba(10,10,11,0.88)" stroke={s.color} strokeWidth={1} strokeOpacity={0.8} />
+                  <text x={6} y={13} fill={s.color} fontSize={9} fontFamily="monospace" fontWeight="900">P</text>
+                  <line x1={15} y1={3} x2={15} y2={15} stroke={s.color} strokeWidth={0.5} strokeOpacity={0.4}/>
+                  <text x={19} y={12} fill="#ffffff" fontSize={9} fontFamily="monospace" fontWeight="700">{countStr}</text>
+                </g>
+              </g>
+            );
+          })}
 
           {/* GHOST RIPPLES */}
           {isGhostActive && selectedId && (

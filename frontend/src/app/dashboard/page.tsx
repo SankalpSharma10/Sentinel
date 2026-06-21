@@ -6,7 +6,7 @@ import { IncidentMap } from '@/components/IncidentMap';
 import { TriagePanel } from '@/components/TriagePanel';
 import { CommanderChat } from '@/components/CommanderChat';
 import { GhostFleetPanel } from '@/components/GhostFleetPanel';
-import { PenaltyZoneOverlay, PenaltyZoneToggle } from '@/components/PenaltyZoneOverlay';
+import { PenaltyZoneToggle } from '@/components/PenaltyZoneOverlay';
 
 interface Incident {
   id: string; junction: string; lat: number; lng: number;
@@ -156,6 +156,7 @@ export default function Dashboard() {
           ghostEarlyFilter={ghostEarlyFilter}
           onMapReady={handleMapReady}
           penaltyZonesVisible={penaltyZonesVisible}
+          penaltyZonesData={penaltyZonesData}
           selectedGhostVehicle={selectedGhostVehicle}
         />
       </div>
@@ -242,12 +243,7 @@ export default function Dashboard() {
       {/* ── GHOST FLEET PANEL (top-right) ────────────── */}
       <GhostFleetPanel onSelectVehicle={handleGhostVehicleSelect} />
 
-      {/* ── PENALTY ZONE OVERLAY (map layer) ─────────── */}
-      <PenaltyZoneOverlay
-        mapInstance={mapInstance}
-        isVisible={penaltyZonesVisible}
-        zonesData={penaltyZonesData}
-      />
+      {/* Penalty zones are now rendered inside IncidentMap's SVG overlay */}
 
       {/* ── TRIAGE PANEL (slides in from right) ────────── */}
       <TriagePanel
